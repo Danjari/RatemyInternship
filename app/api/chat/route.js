@@ -48,7 +48,9 @@ export async function POST(req) {
     const index = pc.Index("RatemyInternship").namespace('ns1');
 
     // Initialize OpenAI client
-    const openai = new OpenAI()
+    const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+    });
 
     // Extract the last message content from the request data
     const text  = data[data.length - 1].content;
