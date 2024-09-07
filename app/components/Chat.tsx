@@ -1,87 +1,92 @@
 'use client';
-import { useChat } from 'ai/react'
-import { useRef, useEffect } from 'react';
-import { User } from 'lucide-react';
-import { Bot } from 'lucide-react';
-import { SendHorizontal } from 'lucide-react';
-
+import { useState } from 'react';
+import { User, Bot, SendHorizontal } from 'lucide-react';
 
 const Chat = () => {
-    const { messages, input, handleInputChange, handleSubmit } = useChat({
-      keepLastMessageOnError: true,
-      api: '/api/chat',
-    });
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: `Hi! I'm the Rate My Internship support assistant. How can I help you today?`,
+    },
+  ]);
+  const [message, setMessage] = useState('');
 
-    const chatContainerRef = useRef<HTMLDivElement>(null);
-    const scroll = () => {
-        if (chatContainerRef.current) {
-            const { offsetHeight, scrollHeight, scrollTop } = chatContainerRef.current;
-            if(scrollHeight >= scrollTop + offsetHeight){
-                chatContainerRef.current.scrollTo(0, scrollHeight);
-            }
+  // Function to handle sending messages
+  const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault(); // Prevent page reload on form submission
+
+    if (!message.trim()) return; // Prevent sending empty messages
+
+    const userMessage = { role: 'user', content: message };
+
+    // Add user message to chat
+    setMessages((prevMessages) => [...prevMessages, userMessage]);
+    setMessage(''); // Clear input field
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [...messages, userMessage] }),
+      });
+
+      if (!response.body) throw new Error('Response body is null');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let result = '';
+
+      // Read and process response stream
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        result += chunk;
+
+        // Update last assistant message with new content
+        setMessages((prevMessages) => {
+          const updatedMessages = [...prevMessages];
+          const lastMessageIndex = updatedMessages.length - 1;
+          updatedMessages[lastMessageIndex] = {
+            ...updatedMessages[lastMessageIndex],
+            content: result,
+          };
+          return updatedMessages;
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
     }
-}
+  };
 
-    useEffect(() => {
-        scroll();
-    }, [messages]);
-
-    const renderResponse = () => {
-        return (
-            <div className='p-10'>
-            {messages.map((message, index) => (
-                <div 
-                key={message.id}
-                className={`chat-line ${message.role === 'user' ? 'user-chat' : 'ai-chat'} flex items-center justify-center mb-4`}>
-                {message.role === 'user' ? <User className='w-4 h-4 mr-2' /> : <Bot className='w-4 h-4 mr-2' />}
-                <div className='ml-4 w-11/12'>
-                    <p className={`message p-3 rounded-lg  ${message.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-black'}`}>{message.content}</p>
-                    {index < messages.length - 1 && (
-                <div className="horizontal-line my-2" />
-              )}
-                </div>
-                </div>
-            ))}
-            </div>
-        );
-    }
-
-  
-    return (
-        <div className="chat flex flex-col h-full p-10">
-        {/* Chat messages container with overflow handling */}
-        <div
-          ref={chatContainerRef}
-          className="flex-grow p-4 overflow-y-auto"
-          style={{ maxHeight: 'calc(100vh - 150px)' }} // Adjust height as needed
-        >
-          {renderResponse()}
-        </div>
-  
-        {/* Input field fixed at the bottom */}
-        <form
-          onSubmit={handleSubmit}
-          className="chat-form flex items-center bg-gray-800 p-3 rounded-full mx-4 mb-4"
-        >   
-          <input
-            name="input-field"
-            type="text"
-            value={input}
-            onChange={handleInputChange}
-            placeholder="How can I help?"
-            className="flex-grow bg-transparent border-none text-white placeholder-gray-500 focus:outline-none px-3"
-            autoComplete="off"
-          />
-          <div className="relative absolute left-0 mt-0 w-30 md:w-[150px] bg-gray-800 text-white rounded-md shadow-lg mx-4">
-
-            </div>
-            <button type="submit">
-            <SendHorizontal className='w-4 h-4' />
-          </button>
-        </form>
+  return (
+    <div className="chat">
+      <div className="messages">
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`message ${message.role === 'user' ? 'user-message' : 'assistant-message'}`}
+          >
+            {message.role === 'user' ? <User className="w-4 h-4 mr-2" /> : <Bot className="w-4 h-4 mr-2" />}
+            {message.content}
+          </div>
+        ))}
       </div>
-    );
-  }
-
+      <form onSubmit={sendMessage} className="chat-form">
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Type your message here..."
+          className="input-field"
+        />
+        <button type="submit" className="send-button">
+          <SendHorizontal className="w-4 h-4" />
+        </button>
+      </form>
+    </div>
+  );
+};
 
 export default Chat;
